@@ -1,0 +1,10 @@
+pandas
+spacy
+tqdm
+symspellpy
+lingua-language-detector
+nltk
+torch
+transformers
+accelerate
+anthropic
