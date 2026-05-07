@@ -1,0 +1,105 @@
+word	year	source	verification_url	pipeline_result	result_detail
+doomscroll	2020	Merriam-Webster 2023	https://www.merriam-webster.com/wordplay/new-words-in-the-dictionary-september-2023	TP	TP
+doomscrolling	2020	Merriam-Webster 2023	https://www.merriam-webster.com/wordplay/new-words-in-the-dictionary-september-2023	TP	TP
+deepfake	2017	Merriam-Webster 2023; British Council 90 Words	https://www.merriam-webster.com/wordplay/new-words-in-the-dictionary-september-2023	TP	TP
+deepfakes	2017	Merriam-Webster 2023	https://www.merriam-webster.com/wordplay/new-words-in-the-dictionary-september-2023	FN	FN_GENUINE
+finsta	2017	Merriam-Webster 2023	https://www.merriam-webster.com/wordplay/new-words-in-the-dictionary-september-2023	FN	FN_GENUINE
+edgelord	2016	Merriam-Webster 2023; British Council 90 Words	https://www.merriam-webster.com/wordplay/new-words-in-the-dictionary-september-2023	FN	FN_CORRECT
+copypasta	2016	Merriam-Webster 2023	https://www.merriam-webster.com/wordplay/new-words-in-the-dictionary-september-2023	FN	FN_CORRECT
+clickbait	2015	Merriam-Webster 2018	https://www.merriam-webster.com/wordplay/new-words-in-the-dictionary-september-2023	FN	FN_CORRECT
+subtweet	2015	Merriam-Webster 2018	https://www.merriam-webster.com/wordplay/new-words-in-the-dictionary-september-2023	FN	FN_CORRECT
+doxing	2015	Merriam-Webster 2017	https://www.merriam-webster.com/dictionary/dox	FN	FN_CORRECT
+doxxing	2015	Merriam-Webster 2023	https://www.merriam-webster.com/wordplay/new-words-in-the-dictionary-september-2023	FN	FN_CORRECT
+ghosting	2017	Merriam-Webster 2017	https://www.merriam-webster.com/dictionary/ghosting	FN	FN_CORRECT
+catfishing	2015	Merriam-Webster 2023	https://www.merriam-webster.com/wordplay/new-words-in-the-dictionary-september-2023	FN	FN_CORRECT
+copium	2020	Collins Dictionary; Merriam-Webster Slang	https://www.collinsdictionary.com/us/dictionary/english/copium	FN	FN_GENUINE
+hopium	2020	Collins Dictionary	https://grammarphobia.com/blog/2026/01/hopium-copium.html	FN	FN_CORRECT
+shitposting	2017	Wiktionary	https://en.wiktionary.org/wiki/shitposting	FN	FN_CORRECT
+shitpost	2017	Wiktionary	https://en.wiktionary.org/wiki/shitpost	FN	FN_CORRECT
+rizz	2023	Merriam-Webster 2023; Oxford WOTY 2023; British Council 90 Words	https://www.merriam-webster.com/wordplay/new-words-in-the-dictionary-september-2023	FN	FN_GENUINE
+simp	2019	Merriam-Webster 2023	https://www.deseret.com/2023/10/6/23906506/merriam-webster-gen-z-slang-words/	FN	FN_GENUINE
+simping	2019	Merriam-Webster 2025 Collegiate (12th ed.)	https://www.aarp.org/entertainment/books/new-words-and-expressions-added-to-english-dictionaries-2025/	FN	FN_GENUINE
+stan	2017	Merriam-Webster 2019	https://www.merriam-webster.com/dictionary/stan	FN	FN_CORRECT
+stanning	2017	Merriam-Webster 2019 (inflected form of stan)	https://www.merriam-webster.com/dictionary/stan	FN	FN_CORRECT
+sealioning	2017	Collins Dictionary	https://www.collinsdictionary.com/dictionary/english/sealioning	FN	FN_CORRECT
+doggo	2017	Merriam-Webster 2023	https://www.globenewswire.com/news-release/2023/09/27/2750188/0/en/690-New-Words-and-Definitions-Added-to-Merriam-Webster.html	FN	FN_GENUINE
+birb	2017	Know Your Meme (DoggoLingo)	https://knowyourmeme.com/memes/doggolingo-doggo-speak	FN	FN_GENUINE
+chonk	2018	Know Your Meme (DoggoLingo)	https://knowyourmeme.com/memes/doggolingo-doggo-speak	FN	FN_GENUINE
+chonky	2018	Know Your Meme (DoggoLingo)	https://knowyourmeme.com/memes/doggolingo-doggo-speak	FN	FN_GENUINE
+poggers	2017	Know Your Meme	https://knowyourmeme.com/memes/poggers	FN	FN_GENUINE
+stonks	2021	Know Your Meme	https://knowyourmeme.com/memes/stonks	FN	FN_GENUINE
+thicc	2017	Know Your Meme; DoggoLingo documentation	https://knowyourmeme.com/memes/thicc	FN	FN_GENUINE
+updoot	2016	Know Your Meme (DoggoLingo)	https://knowyourmeme.com/memes/doggolingo-doggo-speak	TP	TP
+yeet	2018	Merriam-Webster 2023	https://www.merriam-webster.com/wordplay/new-words-in-the-dictionary-september-2023	FN	FN_CORRECT
+yeeted	2018	Merriam-Webster 2023 (inflected form of yeet)	https://www.merriam-webster.com/dictionary/yeet	FN	FN_GENUINE
+sussy	2021	Know Your Meme (Among Us)	https://knowyourmeme.com/memes/sussy-baka	FN	FN_GENUINE
+bussin	2021	Merriam-Webster 2023	https://www.deseret.com/2023/10/6/23906506/merriam-webster-gen-z-slang-words/	FN	FN_CORRECT
+skibidi	2023	Cambridge Dictionary 2025	https://www.nbcnews.com/pop-culture/pop-culture-news/cambridge-dictionary-adds-skibidi-tradwife-6000-new-words-rcna225566	FN	FN_GENUINE
+delulu	2023	Cambridge Dictionary 2025	https://www.nbcnews.com/pop-culture/pop-culture-news/cambridge-dictionary-adds-skibidi-tradwife-6000-new-words-rcna225566	FN	FN_GENUINE
+uwu	2017	Know Your Meme	https://knowyourmeme.com/memes/uwu	FN	FN_CORRECT
+smol	2016	Know Your Meme (DoggoLingo)	https://knowyourmeme.com/memes/doggolingo-doggo-speak	FN	FN_GENUINE
+blorbo	2022	Know Your Meme	https://knowyourmeme.com/memes/blorbo-from-my-shows	TP	TP
+enshittification	2023	American Dialect Society WOTY 2023	https://en.wikipedia.org/wiki/Word_of_the_year	TP	TP
+enshittify	2023	Wiktionary (base form of enshittification)	https://en.wiktionary.org/wiki/enshittify	FN	FN_GENUINE
+touchgrass	2021	Merriam-Webster 2024	https://www.merriam-webster.com/wordplay/new-words-in-the-dictionary	FN	FN_GENUINE
+blockchain	2016	Merriam-Webster 2018	https://www.merriam-webster.com/dictionary/blockchain	FN	FN_CORRECT
+cryptocurrency	2017	Merriam-Webster 2018	https://www.merriam-webster.com/dictionary/cryptocurrency	FN	FN_CORRECT
+bitcoin	2016	Merriam-Webster 2016	https://www.merriam-webster.com/dictionary/Bitcoin	FN	FN_CORRECT
+chatbot	2017	Merriam-Webster 2018	https://www.merriam-webster.com/dictionary/chatbot	FN	FN_CORRECT
+ransomware	2017	Merriam-Webster 2018	https://www.merriam-webster.com/dictionary/ransomware	FN	FN_CORRECT
+deepfaked	2019	Wiktionary (inflected form of deepfake)	https://en.wiktionary.org/wiki/deepfake	FN	FN_GENUINE
+vtuber	2020	Wiktionary	https://en.wiktionary.org/wiki/VTuber	TP	TP
+hodl	2017	Wiktionary	https://en.wiktionary.org/wiki/HODL	FN	FN_CORRECT
+defi	2020	Wiktionary	https://en.wiktionary.org/wiki/DeFi	FN	FN_CORRECT
+altcoin	2017	Wiktionary	https://en.wiktionary.org/wiki/altcoin	FN	FN_CORRECT
+memecoin	2021	Wiktionary	https://en.wiktionary.org/wiki/memecoin	FN	FN_CORRECT
+stablecoin	2020	Wiktionary	https://en.wiktionary.org/wiki/stablecoin	FN	FN_CORRECT
+rugpull	2021	Wiktionary	https://en.wiktionary.org/wiki/rug_pull	FN	FN_GENUINE
+rugpulled	2021	Wiktionary (inflected form)	https://en.wiktionary.org/wiki/rug_pull	FN	FN_GENUINE
+wokeism	2019	Wiktionary	https://en.wiktionary.org/wiki/wokeism	TP	TP
+wokeness	2019	Wiktionary	https://en.wiktionary.org/wiki/wokeness	FN	FN_GENUINE
+trumpism	2016	Wiktionary	https://en.wiktionary.org/wiki/Trumpism	TP	TP
+deplatform	2018	Wiktionary	https://en.wiktionary.org/wiki/deplatform	TP	TP
+deplatformed	2018	Wiktionary (inflected form)	https://en.wiktionary.org/wiki/deplatform	FN	FN_GENUINE
+deplatforming	2018	Wiktionary (inflected form)	https://en.wiktionary.org/wiki/deplatform	TP	TP
+mansplaining	2015	Merriam-Webster 2018	https://www.merriam-webster.com/dictionary/mansplain	FN	FN_CORRECT
+manspreading	2015	Merriam-Webster 2016	https://www.merriam-webster.com/dictionary/manspreading	FN	FN_CORRECT
+whataboutism	2017	Merriam-Webster 2019	https://www.merriam-webster.com/dictionary/whataboutism	FN	FN_CORRECT
+incel	2018	Collins WOTY 2018; British Council 90 Words	https://en.wikipedia.org/wiki/Word_of_the_year	FN	FN_CORRECT
+incels	2018	Collins WOTY 2018 (plural)	https://en.wikipedia.org/wiki/Word_of_the_year	FN	FN_CORRECT
+blackpill	2018	Wiktionary	https://en.wiktionary.org/wiki/blackpill	FN	FN_GENUINE
+blackpilled	2018	Wiktionary (inflected form)	https://en.wiktionary.org/wiki/blackpill	TP	TP
+redpilled	2016	Wiktionary	https://en.wiktionary.org/wiki/redpill	FN	FN_CORRECT
+breadcrumbing	2018	Wiktionary	https://en.wiktionary.org/wiki/breadcrumbing	TP	TP
+situationship	2022	Oxford WOTY 2023 shortlist; British Council 90 Words	https://en.wikipedia.org/wiki/Word_of_the_year	FN	FN_CORRECT
+allyship	2018	Merriam-Webster 2019	https://www.merriam-webster.com/dictionary/allyship	FN	FN_CORRECT
+covidiot	2020	Collins Dictionary submission; academic literature	https://theconversation.com/from-deadly-enemy-to-covidiots-words-matter-when-talking-about-covid-19-159759	TP	TP
+quarantini	2020	Academic literature (COVID neologisms)	https://theconversation.com/from-deadly-enemy-to-covidiots-words-matter-when-talking-about-covid-19-159759	FN	FN_GENUINE
+longcovid	2020	Wiktionary	https://en.wiktionary.org/wiki/long_COVID	TP	TP
+superspreader	2020	Merriam-Webster 2020	https://www.merriam-webster.com/dictionary/superspreader	FN	FN_GENUINE
+doomscroller	2020	Merriam-Webster 2023 (derived from doomscroll)	https://www.merriam-webster.com/dictionary/doomscroll	TP	TP
+covfefe	2017	Wiktionary; widely documented	https://en.wiktionary.org/wiki/covfefe	TP	TP
+infodemic	2020	WHO; academic literature	https://www.weforum.org/agenda/2020/05/from-infodemics-to-lockdowns-the-stories-behind-a-pandemic-vocabulary/	FN	FN_GENUINE
+deadname	2018	Merriam-Webster 2023	https://www.merriam-webster.com/wordplay/new-words-in-the-dictionary-september-2023	FN	FN_GENUINE
+deadnaming	2018	Merriam-Webster 2023 (inflected form)	https://www.merriam-webster.com/dictionary/deadname	FN	FN_GENUINE
+genderfluid	2016	Merriam-Webster 2018	https://www.merriam-webster.com/dictionary/gender-fluid	FN	FN_CORRECT
+demisexual	2018	Wiktionary	https://en.wiktionary.org/wiki/demisexual	FN	FN_CORRECT
+neurodivergent	2020	Merriam-Webster 2023	https://www.merriam-webster.com/wordplay/new-words-in-the-dictionary-september-2023	FN	FN_CORRECT
+adulting	2016	Merriam-Webster 2017; British Council 90 Words	https://www.merriam-webster.com/dictionary/adulting	FN	FN_CORRECT
+cottagecore	2020	Dictionary.com	https://www.dictionary.com/browse/cottagecore	FN	FN_GENUINE
+goblincore	2020	Dictionary.com	https://www.dictionary.com/articles/core-words-cottagecore	TP	TP
+darkcore	2020	Aesthetics Wiki	https://aesthetics.fandom.com/wiki/Darkcore	FN	FN_CORRECT
+tradwife	2020	Cambridge Dictionary 2025	https://www.nbcnews.com/pop-culture/pop-culture-news/cambridge-dictionary-adds-skibidi-tradwife-6000-new-words-rcna225566	TP	TP
+sponcon	2018	Wiktionary	https://en.wiktionary.org/wiki/sponcon	FN	FN_GENUINE
+finfluencer	2020	Wiktionary	https://en.wiktionary.org/wiki/finfluencer	TP	TP
+mukbang	2018	OED 2021	https://www.korea.net/NewsFocus/Society/view?articleId=264601	FN	FN_GENUINE
+hygge	2016	Oxford WOTY 2016	https://en.wikipedia.org/wiki/Word_of_the_year	FN	FN_CORRECT
+glamping	2016	Merriam-Webster 2016	https://www.merriam-webster.com/dictionary/glamping	FN	FN_CORRECT
+athleisure	2016	Merriam-Webster 2016	https://www.merriam-webster.com/dictionary/athleisure	FN	FN_CORRECT
+shadowban	2022	Merriam-Webster 2024	https://www.merriam-webster.com/wordplay/new-words-in-the-dictionary	FN	FN_CORRECT
+jawnz	2023	Urban Dictionary	https://www.urbandictionary.com/define.php?term=Jawnz	FN	FN_CORRECT
+longhauler	2020	Wiktionary	https://en.wiktionary.org/wiki/long-hauler	FN	FN_GENUINE
+rawdogging	2024	Wiktionary	https://en.wiktionary.org/wiki/rawdog	FN	FN_CORRECT
+brainrot	2024	Oxford WOTY 2024	https://en.wikipedia.org/wiki/Word_of_the_year	FN	FN_GENUINE
+airdrop	2017	Wiktionary (crypto sense)	https://en.wiktionary.org/wiki/airdrop	FN	FN_CORRECT
+gaslighting	2016	Merriam-Webster WOTY 2022	https://www.merriam-webster.com/dictionary/gaslighting	FN	FN_CORRECT
