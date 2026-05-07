@@ -1,6 +1,7 @@
 # Neologism Detection Pipeline
 
-> 📄 **Reference paper:** *[Title to be confirmed]* — accepted at the **NeoLLM 2026 workshop at LREC 2026**.
+> 📄 **Reference paper:** *From 124 Million Tokens to 1,021 Neologisms:
+A Large-Scale Pipeline for Automatic Neologism Detection* — accepted at the **NeoLLM 2026 workshop at LREC 2026**.
 > Paper link: *to be added once published* ([placeholder URL]).
 >
 > The paper provides the theoretical background and motivates several of the design choices in this pipeline (the reference-vocabulary filtering strategy, the multi-LLM ensemble + verifier architecture, the inflection-deduplication rules, and the choice of the four-label scheme). Users adapting this pipeline for their own work are strongly encouraged to read the paper first — many decisions that look arbitrary in the code are justified there.
