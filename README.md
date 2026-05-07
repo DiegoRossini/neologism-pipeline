@@ -1,5 +1,10 @@
 # Neologism Detection Pipeline
 
+> 📄 **Reference paper:** *[Title to be confirmed]* — accepted at the **NeoLLM 2026 workshop at LREC 2026**.
+> Paper link: *to be added once published* ([placeholder URL]).
+>
+> The paper provides the theoretical background and motivates several of the design choices in this pipeline (the reference-vocabulary filtering strategy, the multi-LLM ensemble + verifier architecture, the inflection-deduplication rules, and the choice of the four-label scheme). Users adapting this pipeline for their own work are strongly encouraged to read the paper first — many decisions that look arbitrary in the code are justified there.
+
 A modular pipeline that mines newly-coined words and named entities from any large text corpus. It tokenizes, deduplicates, filters against a user-supplied reference vocabulary, runs language detection and LLM-based classification, and produces a labelled, optionally inflection-deduplicated final list of candidates.
 
 The pipeline does not impose a single use case. The example walked through in this README is **English candidate-vocabulary mining from social-media comments with a 2015 reference cutoff**, but the same pipeline runs equally on any corpus, language, or temporal cutoff if you adjust the reference vocabularies and the LLM prompts accordingly (see *Adapting to other corpora and languages* below).
@@ -206,10 +211,20 @@ VOCAB_FILES = [
 ```
 Replace with whatever set of reference vocabulary files makes sense for your task. Format expected: **one token per line**, lower-cased, UTF-8. Add or remove files freely. The SymSpell frequency dictionary (`vocabs/symspell_frequency_dict.txt`) is read separately and must use the format `token<TAB>frequency` (one entry per line).
 
-### 3. Stage 5 — language detection (`stage_5_frequency_filtering.py` + `language_constants.py`)
+### 3. Stage 4 — rule-based filtering logic (English-specific)
+The filtering logic in `stage_4_vocab_filtering.py` and `utils/filtering_utils.py` includes several **English-tuned components** beyond the vocabulary files:
+
+- **SymSpell typo correction** uses the language-specific frequency dictionary. If a candidate is one or two edits away from a known word, it's dropped as a typo. For language X, replace `vocabs/symspell_frequency_dict.txt` with a target-language frequency dictionary in the same `token<TAB>frequency` format.
+- **Word segmentation** uses the same SymSpell index to catch concatenated multi-word strings (`doomscroll` → `doom` + `scroll`) that were typed without spaces. Segmentation only finds valid splits in the language whose dictionary you supply.
+- **Stop-word list** (`utils/filtering_utils.py`) is loaded from spaCy's English stop-words by default. For language X, swap the import for `spacy.lang.<X>.stop_words.STOP_WORDS`.
+- **Lorem Ipsum filter** (also in `filtering_utils.py`) is a hard-coded Latin word list — generally keep it as-is regardless of target language since Lorem Ipsum boilerplate is universal.
+- **Token-validity regex** in `is_valid_candidate()` assumes ASCII / Latin script. For non-Latin-script languages (Cyrillic, CJK, Arabic, etc.) you may need to widen the allowed character classes.
+- **Token length thresholds** in `config.py:VOCAB_FILTERING_CONFIG` (`min_token_length`, `max_token_length`, `min_word_length_typo`, `min_word_length_segmentation`) are tuned for English word distributions and may need adjustment for languages with longer average word lengths (Finnish, German compounds) or shorter ones (Chinese-romanized).
+
+### 4. Stage 5 — language detection (`stage_5_frequency_filtering.py` + `language_constants.py`)
 `RELEVANT_LANGUAGES` lists languages flagged *as foreign* (i.e. everything you want to discard). For target language *X*, change the set so *X* is the kept language and everything you want to filter out is in the list.
 
-### 4. Stages 7, 8, 9 — LLM prompts (English-specific)
+### 5. Stages 7, 8, 9 — LLM prompts (English-specific)
 The prompts in:
 - `stage_7_llm_classify.py` (`create_llm_prompt`, `create_single_token_prompt`)
 - `stage_9_haiku_judge.py` (`SYSTEM_PROMPT`)
@@ -218,7 +233,7 @@ are written in English with English neologism/slang examples. **You must transla
 
 Also note that `stage_8_majority_vote.py`'s vote-type labels (`unanimous`, `majority`, `tie`) are language-agnostic — no edits needed there.
 
-### 5. Stage 10 — inflection rules (English-specific)
+### 6. Stage 10 — inflection rules (English-specific)
 The suffix rules in `stage_10_inflection_dedup.py` (`-s`, `-es`, `-ies`, `-ing` drop; `-ed` keep) are **English-specific**. Other languages have entirely different inflection patterns:
 - Spanish/Italian/Portuguese: gender (`-o/-a`), number (`-s/-es`), verb conjugation (`-ar/-er/-ir` and dozens of forms)
 - German: case + gender + number, separable prefixes
@@ -227,7 +242,7 @@ The suffix rules in `stage_10_inflection_dedup.py` (`-s`, `-es`, `-ies`, `-ing` 
 
 You'll need to rewrite `candidate_bases()` for your language's morphology — or replace it with a proper lemmatizer for that language (spaCy's lemmatizer, Stanza, language-specific morphological analyzers).
 
-### 6. Cutoff date (your choice)
+### 7. Cutoff date (your choice)
 The example pipeline uses 2015-01-01 as the "anything before this is established vocabulary" cutoff. Pass any other date to `extract_pre2015_vocab.py --cutoff-date YYYY-MM-DD`. The corresponding `pre2015_vocab.txt` filename is just a convention — you can rename freely (the reference is in `config.py`).
 
 ## Reproducibility notes
