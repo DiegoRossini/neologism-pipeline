@@ -1,4 +1,4 @@
-# Neologism Detection Pipeline
+# Neologism Detection Pipeline (v2)
 
 <<<<<<< HEAD
 > 📄 **Reference paper:** Rossini, D. & van der Plas, L. *From 124 Million Tokens to 1,021 Neologisms: A Large-Scale Pipeline for Automatic Neologism Detection*. Accepted at the **NeoLLM 2026 workshop at LREC 2026**.
