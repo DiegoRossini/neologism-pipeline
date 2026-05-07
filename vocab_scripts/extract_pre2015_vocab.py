@@ -12,7 +12,7 @@ from pathlib import Path
 import pandas as pd
 from tqdm import tqdm
 
-CUTOFF_DATE = "2015-01-01"
+DEFAULT_CUTOFF_DATE = "2015-01-01"
 
 
 def setup_logging(output_dir):
@@ -27,12 +27,12 @@ def setup_logging(output_dir):
     )
 
 
-def process_single_file(filepath):
+def process_single_file(filepath, cutoff_date):
     tokens = set()
     stats = {
         "file": str(filepath),
         "total_rows": 0,
-        "pre2015_rows": 0,
+        "before_cutoff_rows": 0,
         "tokens_found": 0,
         "errors": 0,
     }
@@ -49,8 +49,8 @@ def process_single_file(filepath):
                 continue
 
             try:
-                if str(date_str) < CUTOFF_DATE:
-                    stats["pre2015_rows"] += 1
+                if str(date_str) < cutoff_date:
+                    stats["before_cutoff_rows"] += 1
 
                     try:
                         tokens_list = ast.literal_eval(tokenized_text)
@@ -76,7 +76,7 @@ def process_single_file(filepath):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Extract vocabulary from pre-2015 entries in a tokenized CSV corpus"
+        description="Extract vocabulary from corpus entries before a user-defined cutoff date"
     )
     parser.add_argument(
         "--input-dir", type=str,
@@ -91,12 +91,21 @@ def main():
              "Defaults to env var NEOLOGISM_PRE2015_OUTPUT_DIR."
     )
     parser.add_argument(
+        "--cutoff-date", type=str, default=DEFAULT_CUTOFF_DATE,
+        help=f"Date in YYYY-MM-DD format. Tokens from rows with date < cutoff are extracted. "
+             f"Default: {DEFAULT_CUTOFF_DATE}"
+    )
+    parser.add_argument(
         "--n-workers", type=int, default=None,
         help="Number of parallel workers (default: all CPUs)"
     )
     parser.add_argument(
         "--limit", type=int, default=None,
         help="Limit number of files to process (for testing)"
+    )
+    parser.add_argument(
+        "--output-name", type=str, default=None,
+        help="Output vocabulary filename (default: cutoff_vocab.txt). Stats file uses the same stem with _stats.json."
     )
     args = parser.parse_args()
 
@@ -117,11 +126,11 @@ def main():
     setup_logging(output_dir)
 
     logging.info("=" * 70)
-    logging.info("EXTRACT PRE-2015 VOCABULARY")
+    logging.info("EXTRACT REFERENCE VOCABULARY")
     logging.info("=" * 70)
     logging.info(f"Input directory: {input_dir}")
     logging.info(f"Output directory: {output_dir}")
-    logging.info(f"Cutoff date: {CUTOFF_DATE} (exclusive)")
+    logging.info(f"Cutoff date: {args.cutoff_date} (exclusive)")
 
     csv_files = sorted(input_dir.glob("*.csv.gz"))
 
@@ -141,16 +150,16 @@ def main():
     all_tokens = set()
     total_stats = {
         "total_files": len(csv_files),
-        "files_with_pre2015": 0,
+        "files_with_matches": 0,
         "total_rows": 0,
-        "pre2015_rows": 0,
+        "before_cutoff_rows": 0,
         "total_errors": 0,
     }
 
     start_time = datetime.now()
 
     with ProcessPoolExecutor(max_workers=n_workers) as executor:
-        futures = {executor.submit(process_single_file, f): f for f in csv_files}
+        futures = {executor.submit(process_single_file, f, args.cutoff_date): f for f in csv_files}
 
         with tqdm(total=len(csv_files), desc="Processing files") as pbar:
             for future in as_completed(futures):
@@ -159,10 +168,10 @@ def main():
 
                     if tokens:
                         all_tokens.update(tokens)
-                        total_stats["files_with_pre2015"] += 1
+                        total_stats["files_with_matches"] += 1
 
                     total_stats["total_rows"] += stats["total_rows"]
-                    total_stats["pre2015_rows"] += stats["pre2015_rows"]
+                    total_stats["before_cutoff_rows"] += stats["before_cutoff_rows"]
                     total_stats["total_errors"] += stats["errors"]
 
                 except Exception as e:
@@ -172,15 +181,18 @@ def main():
                 pbar.update(1)
                 pbar.set_postfix({
                     "tokens": len(all_tokens),
-                    "pre2015_rows": total_stats["pre2015_rows"]
+                    "before_cutoff_rows": total_stats["before_cutoff_rows"]
                 })
 
     elapsed = datetime.now() - start_time
 
     logging.info(f"Processing complete in {elapsed}")
-    logging.info(f"Total unique tokens from pre-2015: {len(all_tokens):,}")
+    logging.info(f"Total unique tokens before cutoff: {len(all_tokens):,}")
 
-    vocab_file = output_dir / "pre2015_vocab.txt"
+    vocab_filename = args.output_name or "cutoff_vocab.txt"
+    if not vocab_filename.endswith(".txt"):
+        vocab_filename = vocab_filename + ".txt"
+    vocab_file = output_dir / vocab_filename
     logging.info(f"Saving vocabulary to {vocab_file}...")
 
     with open(vocab_file, 'w', encoding='utf-8') as f:
@@ -189,24 +201,24 @@ def main():
 
     total_stats["unique_tokens"] = len(all_tokens)
     total_stats["processing_time_seconds"] = elapsed.total_seconds()
-    total_stats["cutoff_date"] = CUTOFF_DATE
+    total_stats["cutoff_date"] = args.cutoff_date
     total_stats["timestamp"] = datetime.now().isoformat()
 
-    stats_file = output_dir / "pre2015_vocab_stats.json"
+    stats_file = output_dir / (vocab_file.stem + "_stats.json")
     with open(stats_file, 'w', encoding='utf-8') as f:
         json.dump(total_stats, f, indent=2)
 
     logging.info("=" * 70)
     logging.info("EXTRACTION COMPLETE!")
     logging.info("=" * 70)
-    logging.info(f"Files processed:     {total_stats['total_files']:,}")
-    logging.info(f"Files with pre-2015: {total_stats['files_with_pre2015']:,}")
-    logging.info(f"Total rows scanned:  {total_stats['total_rows']:,}")
-    logging.info(f"Pre-2015 rows:       {total_stats['pre2015_rows']:,}")
-    logging.info(f"Unique tokens:       {len(all_tokens):,}")
-    logging.info(f"Errors:              {total_stats['total_errors']:,}")
-    logging.info(f"Output vocab:        {vocab_file}")
-    logging.info(f"Output stats:        {stats_file}")
+    logging.info(f"Files processed:        {total_stats['total_files']:,}")
+    logging.info(f"Files with matches:     {total_stats['files_with_matches']:,}")
+    logging.info(f"Total rows scanned:     {total_stats['total_rows']:,}")
+    logging.info(f"Rows before cutoff:     {total_stats['before_cutoff_rows']:,}")
+    logging.info(f"Unique tokens:          {len(all_tokens):,}")
+    logging.info(f"Errors:                 {total_stats['total_errors']:,}")
+    logging.info(f"Output vocab:           {vocab_file}")
+    logging.info(f"Output stats:           {stats_file}")
     logging.info("=" * 70)
 
     return 0

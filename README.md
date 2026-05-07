@@ -1,54 +1,58 @@
 # Neologism Detection Pipeline
 
-A multi-stage pipeline that mines newly-coined English words and named entities from large social-media corpora (Reddit-style CSV dumps). It tokenizes raw text, deduplicates, filters out the pre-2015 standard vocabulary, runs language detection and LLM-based classification, and produces a labelled list of:
+A modular pipeline that mines newly-coined words and named entities from any large text corpus. It tokenizes, deduplicates, filters against a user-supplied reference vocabulary, runs language detection and LLM-based classification, and produces a labelled, optionally inflection-deduplicated final list of candidates.
 
-- **NEOLOGISM** — new English words / slang / derived forms (`doomscrolling`, `youtuber`, `instagrammable`)
-- **ENTITY** — proper nouns (people, brands, fictional characters)
+The pipeline does not impose a single use case. The example walked through in this README is **English candidate-vocabulary mining from social-media comments with a 2015 reference cutoff**, but the same pipeline runs equally on any corpus, language, or temporal cutoff if you adjust the reference vocabularies and the LLM prompts accordingly (see *Adapting to other corpora and languages* below).
+
+The default LLM prompts return one of four labels per token:
+
+- **NEOLOGISM** — newly-coined words, slang, or derived forms (`doomscrolling`, `youtuber`, `instagrammable`)
+- **ENTITY** — proper nouns (people, brands, products, fictional characters)
 - **FOREIGN** — non-English words
-- **NONE** — typos, junk, code identifiers, anything else
+- **NONE** — typos, junk, code identifiers, or anything else
+
+These labels are defined inside the prompt files; you can rewrite them for any classification task.
 
 ## Use case
 
-Useful when you have a large textual corpus and want a curated list of candidate neologisms for lexicography, language-change research, or downstream NLP. The pipeline is explicitly designed to be reproducible at the scale of hundreds of millions of tokens.
+Useful when you have a corpus and want a curated list of new vocabulary candidates for lexicography, language-change research, terminology mining, or downstream NLP. The pipeline is designed to be reproducible at the scale of hundreds of millions of tokens, with each stage resumable from per-token JSONL outputs.
 
 ## Input format
 
-The pipeline reads gzip-compressed CSV files from one or more directories (configured via `NEOLOGISM_BASE_DIR`). Expected layout:
+The pipeline reads gzip-compressed CSV files from one or more directories under `NEOLOGISM_BASE_DIR`. The default subdirectory list is `processed_comments/`, which you can change in `config.py`:
 
-```
-<NEOLOGISM_BASE_DIR>/
-└── processed_comments/
-    ├── subreddit_a_text_comments.csv.gz
-    ├── subreddit_b_text_comments.csv.gz
-    └── ...
+```python
+DATA_DIRS = [
+    BASE_DIR / "your_corpus_subdir",
+    # add more if you want to combine sources
+]
 ```
 
 Each CSV must contain **at least one of** the following text columns:
 - `text`
 - `body`
 
-Optional columns used for deduplication and context selection:
-- `id` / `post_id` — used to detect duplicate posts across the corpus
-- `subreddit` (or any topical field) — used to diversify context examples
-
-The directory layout is mostly conventional; you can change the corpus subdirectory name in `config.py` (`DATA_DIRS`).
+Optional columns:
+- `id` — a unique identifier per text record. Used for cross-document deduplication in stage 2. If absent, deduplication is skipped.
+- A topical/source field (e.g. `subreddit`, `domain`, `category`, …) — used to diversify context examples. The default is `subreddit`; you can rename it in `stage_6_build_context.py`.
 
 ## Pipeline stages
 
-| Stage | Script | What it does | Scale-up cost |
+| Stage | Script | What it does | Cost profile |
 |---|---|---|---|
 | 0 | `stage_0_tokenization.py` | spaCy tokenization of every CSV. Lower-cases, strips URLs/emails, drops stop-words, writes tokenized output back to each CSV. | High CPU |
 | 1 | `stage_1_merge_batches.py` | Merges per-file token counts into a single global counts file. | Mid CPU + RAM |
-| 2 | `stage_2_duplicate_analysis.py` | Hashes post text to identify duplicates; produces a `duplicate_ids.txt` so later stages can deduplicate when counting. | High CPU + RAM |
+| 2 | `stage_2_duplicate_analysis.py` | Hashes record text to identify duplicates; produces `duplicate_ids.txt` so later stages can deduplicate when counting. | High CPU + RAM |
 | 3 | `stage_3_token_counting.py` | Produces deduped global token counts using the dup-IDs from stage 2. | Mid CPU + RAM |
-| 4 | `stage_4_vocab_filtering.py` | Removes tokens already in pre-2015 standard English vocabulary (Wiktionary, Wikipedia titles, WordNet, Urban Dictionary, NoSlang). Uses SymSpell to also catch typos and concatenated words. | High CPU + RAM, longest stage |
-| 5 | `stage_5_frequency_filtering.py` | Drops candidates below the `MIN_OCCURRENCES` threshold; runs token-level `lingua` language detection to filter obvious foreign words. | Mid CPU |
+| 4 | `stage_4_vocab_filtering.py` | Removes tokens already in your reference vocabulary stack (e.g. an established lexicon for the language and time period you're studying). Uses SymSpell to also catch typos and concatenated words. | High CPU + RAM, longest stage |
+| 5 | `stage_5_frequency_filtering.py` | Drops candidates below the `MIN_OCCURRENCES` threshold; runs token-level `lingua` language detection to filter clearly foreign words. **Prompts and language list are English-tuned by default** — see *Adapting* section. | Mid CPU |
 | 6 | `stage_6_build_context.py` | For each remaining candidate, samples up to N occurrences from the original corpus to provide context for downstream classification. | High CPU + RAM |
-| 7 | `stage_7_llm_classify.py` | Runs three independent open-weight LLMs (Qwen 2.5-72B, Llama 3.3-70B, Mistral Large 2411) via vLLM. Each returns one of the four labels per token, after a context-level second pass of `lingua` for foreign filtering. | GPU (4× ≥ 80 GB) |
-| 8 | `stage_8_claude_classify.py` | Optional fourth opinion via Anthropic API (Claude). | API quota |
-| 9 | `stage_9_majority_vote.py` | Consolidates labels from stages 7-8 into a final per-token decision. | Trivial |
+| 7 | `stage_7_llm_classify.py` | Runs three independent open-weight LLMs (Qwen, Llama, Mistral by default) via vLLM. Each returns one of four labels per token, after a context-level second pass of `lingua`. **Prompts are English-tuned by default.** | GPU (4× ≥ 80 GB recommended) |
+| 8 | `stage_8_majority_vote.py` | Consolidates labels from the three LLMs into a single per-token decision. Outputs `majority_vote_results.tsv`. **Optional**; can stop here if you want a single-vote ensemble. | Trivial |
+| 9 | `stage_9_haiku_judge.py` | Optional 4th-opinion verifier via Anthropic API (Claude Haiku by default). Filters the majority-vote output by `--scope` (unanimous / unanimous_majority / all) and replaces labels for verified tokens. **Optional**; skip entirely if you don't have an API key or don't need the extra opinion. | API quota |
+| 10 | `stage_10_inflection_dedup.py` | Inflectional deduplication of the NEOLOGISM bucket: drops `-s`/`-es`/`-ies`/`-ing` variants when the base form is already present. **Rules are English-specific** — see *Adapting*. Auto-detects whether to read stage 9's output or stage 8's. | Trivial |
 
-The pipeline is **resumable**: each stage writes a `.flag` file in `data/checkpoints/` on completion and skips work it's already done.
+The pipeline is **resumable**: each stage writes a `.flag` file in `data/checkpoints/` on completion and skips work it has already done.
 
 ## How to run
 
@@ -58,15 +62,17 @@ The pipeline is **resumable**: each stage writes a `.flag` file in `data/checkpo
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-python -m spacy download en_core_web_sm
+python -m spacy download en_core_web_lg
 python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab')"
 ```
 
-For stage 7, install vLLM in a separate venv (it pulls a pinned torch and is best kept isolated from the main one). On aarch64 GPU nodes (e.g. NVIDIA Grace-Hopper), the vLLM install needs CUDA-compatible aarch64 wheels; on x86_64 the standard PyPI wheels work.
+(`en_core_web_lg` is ~750 MB. Smaller variants like `_md` or `_sm` will work if you edit the model name in `stage_0_tokenization.py`, with some loss of tokenization quality on noisy text.)
 
-### 2. Build the pre-2015 vocabularies
+For stage 7, install vLLM in a separate venv (it pulls a pinned torch and is best kept isolated). vLLM has good wheel coverage on x86_64 + CUDA. On other architectures (e.g. aarch64), wheel availability varies — check vLLM's release page or build from source.
 
-The pipeline filters candidate neologisms against a stack of pre-2015 vocabularies stored in `vocabs/`. The repo provides scripts to (re)build most of them; a few must be obtained from external sources.
+### 2. Build the filtering vocabularies
+
+The pipeline filters candidate tokens against a stack of reference vocabularies stored in `vocabs/`. **The cutoff date and the choice of reference sources are entirely up to you** — the example below uses 2015-01-01 as the cutoff and assembles vocabularies from Wikipedia titles, Wiktionary, Urban Dictionary, and the corpus itself, but you can substitute anything that gives you a "known prior vocabulary" for your task.
 
 **Auto-generated by scripts in this repo:**
 
@@ -75,29 +81,33 @@ python vocab_scripts/download_wikipedia_titles_pre2015.py --output vocabs/wikipe
 python vocab_scripts/download_wiktionary_pre2015.py       --output vocabs/wiktionary_pre2015_vocab.txt
 python vocab_scripts/urbanDict_download.py                --output-dir vocabs/
 
-# pre-2015 corpus vocabulary — needs your own tokenized corpus to have already run stage 0
 NEOLOGISM_PRE2015_INPUT_DIR=/path/to/processed_corpus \
 NEOLOGISM_PRE2015_OUTPUT_DIR=vocabs/ \
-python vocab_scripts/extract_pre2015_vocab.py
+python vocab_scripts/extract_pre2015_vocab.py \
+  --cutoff-date 2015-01-01 \
+  --output-name pre2015_vocab.txt
 
-# corpus-derived frequency dict (used by SymSpell), built after the corpus has been counted
 python build_frequency_dict.py
 ```
 
-**Must be obtained externally:**
+For a different cutoff (e.g. 2010 or 2020), just pass `--cutoff-date` to `extract_pre2015_vocab.py` — and adapt the Wikipedia/Wiktionary download scripts similarly if you want their snapshots aligned to the same date.
 
-| File | Source |
+**Must be obtained externally** (each is its own license/distribution decision; the repo does not ship them):
+
+| File | Where to get it |
 |---|---|
-| `wordnet_vocab.txt` | extracted from NLTK's WordNet via `nltk.corpus.wordnet`. Run once: `python -c "import nltk; nltk.download('wordnet'); from nltk.corpus import wordnet; open('vocabs/wordnet_vocab.txt','w').writelines(w + '\n' for w in sorted(set(l.name() for s in wordnet.all_synsets() for l in s.lemmas())))"` |
-| `noslang_word_list.txt` | scrape or download from a slang lexicon (e.g. noslang.com); place under `vocabs/`. |
+| `wordnet_vocab.txt` | extract from NLTK's WordNet via `nltk.corpus.wordnet`, e.g. `python -c "import nltk; nltk.download('wordnet'); from nltk.corpus import wordnet; open('vocabs/wordnet_vocab.txt','w').writelines(w + '\n' for w in sorted(set(l.name() for s in wordnet.all_synsets() for l in s.lemmas())))"` |
+| `noslang_word_list.txt` | a slang/jargon dictionary appropriate for your domain. The example shipped with this pipeline used a private list obtained from the lexicon's authors; you'll need to source your own (academic correspondence, open slang corpora, scraped term lists from a relevant lexicon, etc.). One token per line. |
+
+You can also drop in *any* additional vocabulary files and add them to `VOCAB_FILES` in `config.py`. The vocabulary stage is just "is this token in any of these reference lists?" — what you feed it is your choice.
 
 ### 3. Configure environment variables
 
-Copy `.env.example` to `.env` (or export directly in your shell). At minimum set:
+Copy `.env.example` to `.env` (or export directly in your shell). At minimum:
 
 ```bash
 export NEOLOGISM_BASE_DIR=/path/to/data_root      # required for all stages
-export ANTHROPIC_API_KEY=sk-ant-...               # only for stage 8
+export ANTHROPIC_API_KEY=sk-ant-...               # only for stage 9 (optional)
 export HF_HOME=/path/to/huggingface_cache         # only for stage 7 (model cache)
 export HF_TOKEN=...                               # only for stage 7 (gated models)
 ```
@@ -114,29 +124,21 @@ python stage_3_token_counting.py
 python stage_4_vocab_filtering.py
 python stage_5_frequency_filtering.py
 python stage_6_build_context.py
-python stage_7_llm_classify.py        # GPU node required
-python stage_8_claude_classify.py     # ANTHROPIC_API_KEY required
-python stage_9_majority_vote.py
+python stage_7_llm_classify.py        # GPU recommended
+python stage_8_majority_vote.py
+python stage_9_haiku_judge.py --scope unanimous   # optional, requires ANTHROPIC_API_KEY
+python stage_10_inflection_dedup.py
 ```
 
-Each stage writes a `.flag` file in `data/checkpoints/` on completion and skips work it's already done. To force a re-run, pass `--force`. To run only one of the stage 7 LLMs:
+Each stage writes a `.flag` file in `data/checkpoints/` on completion and skips work it has already done. To force a re-run, pass `--force`. To run only one of the stage 7 LLMs:
 
 ```bash
 python stage_7_llm_classify.py --model qwen_72b
-python stage_7_llm_classify.py --model llama_70b
-python stage_7_llm_classify.py --model mistral_large
 ```
 
-For HPC users: at the scale of hundreds of millions of tokens, several stages need a multi-hour SLURM job and stage 7 needs a multi-GPU node. Each script is self-contained and logs to stdout — wrapping it in an `sbatch` script is straightforward (see "Compute requirements at scale" below for sizing).
+If you skip stage 9, stage 10 will automatically read `majority_vote_results.tsv` (from stage 8) instead of `FINAL_RESULTS.tsv`.
 
-Smoke test on a tiny corpus:
-
-```bash
-mkdir -p test_corpus
-cp /your/sample_*.csv.gz test_corpus/
-export NEOLOGISM_TEST_CORPUS_DIR=$PWD/test_corpus
-python test_pipeline_github.py
-```
+For very large corpora, wrap any stage in your scheduler of choice (SLURM, PBS, k8s, etc.) — every script is self-contained and logs to stdout.
 
 ## Library requirements
 
@@ -145,15 +147,15 @@ Listed in `requirements.txt`:
 | Package | Used by | Purpose |
 |---|---|---|
 | `pandas` | most stages | CSV / DataFrame handling |
-| `spacy` (+ `en_core_web_sm`) | stage 0 | tokenization, stop-words |
+| `spacy` (+ `en_core_web_lg`) | stage 0 | tokenization, stop-words |
 | `tqdm` | all | progress bars |
 | `symspellpy` | stage 4 | spelling correction + word segmentation |
 | `lingua-language-detector` | stages 5, 7 | language detection |
 | `nltk` | stages 0, 2 | sentence segmentation |
-| `torch`, `transformers`, `accelerate` | stage 7 | model loading |
-| `anthropic` | stage 8 | Claude API client |
+| `torch`, `transformers`, `accelerate` | stage 7 | model loading (replaced by vLLM in production) |
+| `anthropic` | stage 9 | Claude API client (only if you run stage 9) |
 
-For stage 7 you additionally need **vLLM** (recommended) for high-throughput inference. Install in a dedicated venv on the GPU node:
+For stage 7 you additionally need **vLLM** for high-throughput inference. Install in a dedicated venv on the GPU node:
 
 ```bash
 pip install vllm
@@ -163,7 +165,7 @@ vLLM pulls its own pinned torch — keep it isolated from the CPU-stages venv.
 
 ## Compute requirements at scale
 
-For a corpus of ~800 M tokens, ~4 M unique tokens, distilled to ~280 K candidates after vocab + frequency + foreign filtering:
+For a corpus of ~800 M tokens, ~4 M unique tokens, distilled to ~280 K candidates after vocab + frequency + foreign filtering (the example case shipped with this pipeline):
 
 | Stage | Wall time | RAM | CPUs | GPUs |
 |---|---|---|---|---|
@@ -174,47 +176,67 @@ For a corpus of ~800 M tokens, ~4 M unique tokens, distilled to ~280 K candidate
 | 4 | **~35 h** | 200 GB | 16 | — |
 | 5 | ~4 h | 100 GB | 4 | — |
 | 6 | ~6 h | 200 GB | 16 | — |
-| 7 (all 3 LLMs, vLLM) | ~7 h | 200 GB host | 16 | 4× ≥ 80 GB |
-| 8 | ~2 h (API limited) | 8 GB | 1 | — |
-| 9 | minutes | 8 GB | 1 | — |
+| 7 (all 3 LLMs, vLLM) | ~12-24 h | 200 GB host | 16 | 4× ≥ 80 GB |
+| 8 | seconds | 8 GB | 1 | — |
+| 9 (Haiku batch) | 1-12 h | 8 GB | 1 | — |
+| 10 | seconds | 8 GB | 1 | — |
 
-Stage 7 on **smaller GPUs** (e.g. 4× 40 GB A100) requires either `--quantize` (4-bit NF4) or skipping Mistral 123B (use Qwen + Llama only).
+A workstation with ≥200 GB RAM and 16 cores is comfortable for stages 0-6 at this scale. Smaller corpora (under ~100 M tokens) run on a 64 GB workstation. Stage 7 is the only stage that genuinely requires multi-GPU; on smaller GPUs (e.g. 4× 40 GB), use `--quantize` or run only Qwen + Llama and skip Mistral.
 
-For stages 0-6 (CPU-only), an HPC node with ≥ 200 GB RAM and 16 cores is a comfortable target. Smaller corpora (< 100 M tokens) can run on a workstation with 64 GB RAM.
+## Adapting to other corpora and languages
 
-## Adapting to other languages
+The pipeline architecture generalizes, but **several places contain English-specific or use-case-specific defaults you must adapt**:
 
-The pipeline is **English-tuned** but the architecture generalizes. To adapt to language *X*:
+### 1. Stage 0 — spaCy model (`stage_0_tokenization.py`)
+```python
+nlp = spacy.load("en_core_web_lg")
+```
+Replace with the spaCy model for your target language (e.g. `xx_core_web_lg` where `xx` is the ISO code). Update the stop-word list import accordingly.
 
-1. **Stage 0 (`stage_0_tokenization.py`)** — replace the spaCy model:
-   ```python
-   nlp = spacy.load("xx_core_web_sm")  # instead of en_core_web_sm
-   ```
-   …and the stop-word list (`spacy.lang.<X>.stop_words.STOP_WORDS`).
+### 2. Stage 4 — reference vocabularies (`config.py:VOCAB_FILES`)
+```python
+VOCAB_FILES = [
+    VOCAB_DIR / "wikipedia_titles_pre2015_vocab.txt",
+    VOCAB_DIR / "wiktionary_pre2015_vocab.txt",
+    VOCAB_DIR / "noslang_word_list.txt",
+    VOCAB_DIR / "pre2015_vocab.txt",
+    VOCAB_DIR / "urban_dict_pre2015_vocab.txt",
+    VOCAB_DIR / "wordnet_vocab.txt",
+]
+```
+Replace with whatever set of reference vocabulary files makes sense for your task. Format expected: **one token per line**, lower-cased, UTF-8. Add or remove files freely. The SymSpell frequency dictionary (`vocabs/symspell_frequency_dict.txt`) is read separately and must use the format `token<TAB>frequency` (one entry per line).
 
-2. **Stage 4 (`stage_4_vocab_filtering.py`)** — supply pre-2015 vocabularies in language *X*:
-   - Wiktionary dump for that language (replace `vocabs/wiktionary_pre2015_vocab.txt`)
-   - Wikipedia titles in that language (replace `vocabs/wikipedia_titles_pre2015_vocab.txt`)
-   - A WordNet-equivalent (e.g. Open Multilingual WordNet entries for that language)
-   - A standard frequency dict (replace `vocabs/symspell_frequency_dict.txt`)
-   - Any colloquial/slang list equivalent to NoSlang or Urban Dictionary
-   The structure of `vocabs/` is opinionated about file names; either match those names or update `config.py:VOCAB_FILES`.
+### 3. Stage 5 — language detection (`stage_5_frequency_filtering.py` + `language_constants.py`)
+`RELEVANT_LANGUAGES` lists languages flagged *as foreign* (i.e. everything you want to discard). For target language *X*, change the set so *X* is the kept language and everything you want to filter out is in the list.
 
-3. **Stage 5 (`stage_5_frequency_filtering.py`) and `language_constants.py`** — `RELEVANT_LANGUAGES` currently lists languages to flag *as foreign* (i.e., everything but English). For target language *X*, change this set so that *X* is the kept language and everything else is flagged.
+### 4. Stages 7, 8, 9 — LLM prompts (English-specific)
+The prompts in:
+- `stage_7_llm_classify.py` (`create_llm_prompt`, `create_single_token_prompt`)
+- `stage_9_haiku_judge.py` (`SYSTEM_PROMPT`)
 
-4. **Stage 7 (`stage_7_llm_classify.py`)** — the prompt in `create_llm_prompt` and `create_single_token_prompt` is in English and refers to "English neologisms". Translate it to *X* and update the few-shot examples. Choose multilingual-strong models for the target language (Mistral and Qwen handle most major languages reasonably; for low-resource languages consider language-specific instruction-tuned models).
+are written in English with English neologism/slang examples. **You must translate them** to your target language and update the few-shot examples. The four-label scheme (ENTITY / NEOLOGISM / FOREIGN / NONE) is also a choice — if your task needs different categories (e.g. *technical-term / general-vocabulary / brand / discard*), rewrite the prompts and update the parser in `parse_llm_response`.
 
-5. **Stage 8 (Claude prompts)** — same translation work as Stage 7's prompts.
+Also note that `stage_8_majority_vote.py`'s vote-type labels (`unanimous`, `majority`, `tie`) are language-agnostic — no edits needed there.
 
-The dedup logic (Stage 2) and counting (Stages 1, 3) are language-agnostic and need no changes.
+### 5. Stage 10 — inflection rules (English-specific)
+The suffix rules in `stage_10_inflection_dedup.py` (`-s`, `-es`, `-ies`, `-ing` drop; `-ed` keep) are **English-specific**. Other languages have entirely different inflection patterns:
+- Spanish/Italian/Portuguese: gender (`-o/-a`), number (`-s/-es`), verb conjugation (`-ar/-er/-ir` and dozens of forms)
+- German: case + gender + number, separable prefixes
+- Slavic languages: rich case morphology
+- Agglutinative languages (Finnish, Turkish, Korean): suffix stacking
+
+You'll need to rewrite `candidate_bases()` for your language's morphology — or replace it with a proper lemmatizer for that language (spaCy's lemmatizer, Stanza, language-specific morphological analyzers).
+
+### 6. Cutoff date (your choice)
+The example pipeline uses 2015-01-01 as the "anything before this is established vocabulary" cutoff. Pass any other date to `extract_pre2015_vocab.py --cutoff-date YYYY-MM-DD`. The corresponding `pre2015_vocab.txt` filename is just a convention — you can rename freely (the reference is in `config.py`).
 
 ## Reproducibility notes
 
-- Random seeds are not exhaustively pinned; for reproducible LLM classifications use `temperature=0.0` (the default in stage 7).
-- The vocabulary snapshot date (pre-2015) is a deliberate choice for "what counts as a neologism" — adjust by regenerating `vocabs/` against a different dump.
-- Stages 1-6 are deterministic given the input corpus.
-- Stage 7 may differ slightly between runs due to non-deterministic CUDA kernels; the disagreement is below the level that matters for majority-voted labels.
+- LLM classifications use `temperature=0` for determinism; outputs may still differ slightly across runs due to non-deterministic CUDA kernels, but disagreements are below the level that matters for majority-voted labels.
+- Stage 9 (Haiku) uses Anthropic's Batch API by default; results can vary slightly between API runs due to model updates on Anthropic's side. Pin `--model claude-haiku-4-5` (or whatever exact version you used) for reproducibility.
+- Stages 1-6, 8, and 10 are fully deterministic given the input corpus.
+- The reference vocabulary snapshot date is a methodological choice — adjust by regenerating `vocabs/` against a different date.
 
 ## Disclaimer
 
-This pipeline was developed for academic research on English neologism detection in Reddit data. Outputs are filtered candidates; manual verification is recommended before downstream use, especially for the **NEOLOGISM** bucket where polysemy and inflectional variation can introduce noise.
+This pipeline produces **filtered candidates**, not gold-standard labels. Manual verification is recommended before downstream use, especially for the **NEOLOGISM** bucket where polysemy, inflectional variation, and domain-specific jargon can introduce noise. The example use case shipped with the repo is academic research on English neologism detection in social-media discourse.
