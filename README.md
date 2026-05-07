@@ -1,7 +1,7 @@
 # Neologism Detection Pipeline
 
-> 📄 **Reference paper:** *[Title to be confirmed]* — accepted at the **NeoLLM 2026 workshop at LREC 2026**.
-> Paper link: *to be added once published* ([placeholder URL]).
+> 📄 **Reference paper:** Rossini, D. & van der Plas, L. *From 124 Million Tokens to 1,021 Neologisms: A Large-Scale Pipeline for Automatic Neologism Detection*. Accepted at the **NeoLLM 2026 workshop at LREC 2026**.
+> Paper link: <!-- PAPER_URL --> *(to be added)*
 >
 > The paper provides the theoretical background and motivates several of the design choices in this pipeline (the reference-vocabulary filtering strategy, the multi-LLM ensemble + verifier architecture, the inflection-deduplication rules, and the choice of the four-label scheme). Users adapting this pipeline for their own work are strongly encouraged to read the paper first — many decisions that look arbitrary in the code are justified there.
 
@@ -217,7 +217,7 @@ The filtering logic in `stage_4_vocab_filtering.py` and `utils/filtering_utils.p
 - **SymSpell typo correction** uses the language-specific frequency dictionary. If a candidate is one or two edits away from a known word, it's dropped as a typo. For language X, replace `vocabs/symspell_frequency_dict.txt` with a target-language frequency dictionary in the same `token<TAB>frequency` format.
 - **Word segmentation** uses the same SymSpell index to catch concatenated multi-word strings (`doomscroll` → `doom` + `scroll`) that were typed without spaces. Segmentation only finds valid splits in the language whose dictionary you supply.
 - **Stop-word list** (`utils/filtering_utils.py`) is loaded from spaCy's English stop-words by default. For language X, swap the import for `spacy.lang.<X>.stop_words.STOP_WORDS`.
-- **Lorem Ipsum filter** (also in `filtering_utils.py`) is a hard-coded Latin word list — generally keep it as-is regardless of target language since Lorem Ipsum boilerplate is universal.
+- **Lorem Ipsum filter** (also in `filtering_utils.py`) is a hard-coded list of *pseudo-Latin filler words* — Lorem Ipsum is not real Latin, it's the standard placeholder/dummy text used in design and publishing when the real content isn't ready yet. The same boilerplate string gets pasted into corpora in every language, so this filter is universally useful and should be kept as-is regardless of target language.
 - **Token-validity regex** in `is_valid_candidate()` assumes ASCII / Latin script. For non-Latin-script languages (Cyrillic, CJK, Arabic, etc.) you may need to widen the allowed character classes.
 - **Token length thresholds** in `config.py:VOCAB_FILTERING_CONFIG` (`min_token_length`, `max_token_length`, `min_word_length_typo`, `min_word_length_segmentation`) are tuned for English word distributions and may need adjustment for languages with longer average word lengths (Finnish, German compounds) or shorter ones (Chinese-romanized).
 
@@ -252,6 +252,20 @@ The example pipeline uses 2015-01-01 as the "anything before this is established
 - Stages 1-6, 8, and 10 are fully deterministic given the input corpus.
 - The reference vocabulary snapshot date is a methodological choice — adjust by regenerating `vocabs/` against a different date.
 
+## Citation
+
+If you use this pipeline in academic work, please cite the accompanying paper:
+
+```bibtex
+@inproceedings{rossini2026neologism,
+  title     = {From 124 Million Tokens to 1,021 Neologisms: A Large-Scale Pipeline for Automatic Neologism Detection},
+  author    = {Rossini, Diego and van der Plas, Lonneke},
+  booktitle = {Proceedings of the NeoLLM Workshop at LREC 2026},
+  year      = {2026},
+  url       = {<!-- PAPER_URL -->}
+}
+```
+
 ## Disclaimer
 
-This pipeline produces **filtered candidates**, not gold-standard labels. Manual verification is recommended before downstream use, especially for the **NEOLOGISM** bucket where polysemy, inflectional variation, and domain-specific jargon can introduce noise. The example use case shipped with the repo is academic research on English neologism detection in social-media discourse.
+This pipeline produces **filtered candidates**, not gold-standard labels. Manual verification is recommended before downstream use, especially for the **NEOLOGISM** bucket where polysemy, inflectional variation, and domain-specific jargon can introduce noise. The example use case shipped with the repo is academic research on English neologism detection in social-media discourse — the methodological choices behind that case are documented in the reference paper (see top of this README).
