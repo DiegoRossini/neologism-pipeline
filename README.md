@@ -1,8 +1,9 @@
 # Neologism Detection Pipeline (v2)
 
-> 📄 **Reference paper:** *From 124 Million Tokens to 1,021 Neologisms:
-A Large-Scale Pipeline for Automatic Neologism Detection* — accepted at the **NeoLLM 2026 workshop at LREC 2026**.
-> Paper link: *to be added once published* ([placeholder URL]).
+> 📄 **Reference paper:** *From 124 Million Tokens to 1,021 Neologisms: A Large-Scale Pipeline for Automatic Neologism Detection* — Diego Rossini, Lonneke van der Plas. Accepted at the **NeoLLM 2026 workshop at LREC 2026**.
+>
+> Preprint: [arXiv:2605.06426](https://arxiv.org/abs/2605.06426)
+>
 > The paper provides the theoretical background and motivates several of the design choices in this pipeline (the reference-vocabulary filtering strategy, the multi-LLM ensemble + verifier architecture, the inflection-deduplication rules, and the choice of the four-label scheme). Users adapting this pipeline for their own work are strongly encouraged to read the paper first — many decisions that look arbitrary in the code are justified there.
 
 A modular pipeline that mines newly-coined words and named entities from any large text corpus. It tokenizes, deduplicates, filters against a user-supplied reference vocabulary, runs language detection and LLM-based classification, and produces a labelled, optionally inflection-deduplicated final list of candidates.
