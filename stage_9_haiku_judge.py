@@ -350,6 +350,16 @@ def retrieve_and_write(client, batch_id, custom_id_to_token):
     cache_read = 0
     cache_create = 0
 
+    batch = client.messages.batches.retrieve(batch_id)
+    if batch.processing_status != "ended" or not getattr(batch, "results_url", None):
+        rc = batch.request_counts
+        logging.warning(
+            f"  Batch {batch_id} has no retrievable results "
+            f"(status={batch.processing_status} succeeded={rc.succeeded} "
+            f"errored={rc.errored} canceled={getattr(rc, 'canceled', 0)}). Skipping retrieve."
+        )
+        return n_succeeded, n_errored, n_unknown, in_tok, out_tok, cache_read, cache_create
+
     results_f = open(HAIKU_RESULTS, "a", encoding="utf-8")
     raw_f = open(HAIKU_RAW_RESPONSES, "a", encoding="utf-8")
     try:
@@ -389,14 +399,15 @@ def retrieve_and_write(client, batch_id, custom_id_to_token):
 
 
 def write_final_results(majority_rows, haiku_results, output_path):
+    n_written = 0
     with open(output_path, "w", encoding="utf-8") as f:
-        f.write("token\tfinal_label\tsource\n")
+        f.write("token\tfinal_label\n")
         for row in majority_rows:
             tok = row["token"]
             if row["label"] == "NEOLOGISM" and tok in haiku_results:
-                f.write(f"{tok}\t{haiku_results[tok]}\thaiku\n")
-            else:
-                f.write(f"{tok}\t{row['label']}\tmajority\n")
+                f.write(f"{tok}\t{haiku_results[tok]}\n")
+                n_written += 1
+    return n_written
 
 
 def is_complete():
@@ -505,6 +516,8 @@ def run(args):
                 if timed_out:
                     logging.warning(f"  Chunk {chunk_idx + 1} TIMED OUT and was canceled; tokens will retry on next run")
                     n_skipped += 1
+                    clear_batch_state()
+                    continue
                 logging.info(f"  Retrieving results...")
                 stats = retrieve_and_write(client, batch.id, custom_id_to_token)
                 logging.info(f"  Chunk done: succeeded={stats[0]} errored={stats[1]} parsed_as_NONE={stats[2]}")
@@ -515,35 +528,29 @@ def run(args):
 
     logging.info(f"Building {HAIKU_JUDGE_RESULTS.name}...")
     haiku_results = load_done_haiku_tokens(HAIKU_RESULTS)
-    write_final_results(majority_rows, haiku_results, HAIKU_JUDGE_RESULTS)
-    logging.info(f"Wrote {len(majority_rows):,} rows to {HAIKU_JUDGE_RESULTS}")
+    n_written = write_final_results(majority_rows, haiku_results, HAIKU_JUDGE_RESULTS)
+    logging.info(f"Wrote {n_written:,} Haiku-judged rows to {HAIKU_JUDGE_RESULTS}")
 
     final_counts = Counter()
-    source_counts = Counter()
-    haiku_disagreement = 0
+    haiku_overruled = 0
     for row in majority_rows:
         tok = row["token"]
         if row["label"] == "NEOLOGISM" and tok in haiku_results:
             final_counts[haiku_results[tok]] += 1
-            source_counts["haiku"] += 1
-            if haiku_results[tok] != row["label"]:
-                haiku_disagreement += 1
-        else:
-            final_counts[row["label"]] += 1
-            source_counts["majority"] += 1
+            if haiku_results[tok] != "NEOLOGISM":
+                haiku_overruled += 1
 
     logging.info("=" * 70)
-    logging.info("FINAL RESULTS")
+    logging.info("HAIKU VERDICT BREAKDOWN")
     logging.info("=" * 70)
-    logging.info("Label distribution:")
+    logging.info(f"Total NEOLOGISM-flagged candidates judged: {n_written:,}")
+    logging.info("Haiku verdict distribution:")
     for label, cnt in final_counts.most_common():
-        logging.info(f"  {label}: {cnt:,}")
-    logging.info("Source breakdown:")
-    for src, cnt in source_counts.most_common():
-        logging.info(f"  {src}: {cnt:,}")
-    if source_counts.get("haiku", 0) > 0:
-        pct = 100 * haiku_disagreement / source_counts["haiku"]
-        logging.info(f"Haiku overruled the majority on {haiku_disagreement:,} / {source_counts['haiku']:,} verified tokens ({pct:.1f}%)")
+        pct = 100 * cnt / n_written if n_written else 0
+        logging.info(f"  {label}: {cnt:,} ({pct:.1f}%)")
+    if n_written > 0:
+        pct = 100 * haiku_overruled / n_written
+        logging.info(f"Haiku overruled the majority on {haiku_overruled:,} / {n_written:,} candidates ({pct:.1f}%)")
 
     if not args.dry_run and args.max_tokens is None:
         mark_complete()
@@ -561,24 +568,21 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Design: Haiku acts as a final verifier on the NEOLOGISM-labeled subset of the
-3-LLM majority vote. For every token where the majority vote says NEOLOGISM
-and Haiku has rendered a verdict, haiku_4_5_judge_results.tsv uses Haiku's
-label (which may downgrade the token to ENTITY / FOREIGN / NONE). For every
-other token (label != NEOLOGISM, or NEOLOGISM-labeled but Haiku skipped it),
-the majority vote stands.
+3-LLM majority vote. The script reads majority_vote_results.tsv, keeps only
+NEOLOGISM-labeled rows (both unanimous and 2-of-3 majority), sends them to
+Claude Haiku 4.5 for verification, and writes Haiku's verdict for each one.
+
+Non-NEOLOGISM rows from the majority vote are NOT included in this output —
+they are unchanged from stage 8 and live in majority_vote_results.tsv.
 
 Input:  data/output/majority_vote_results.tsv (stage 8 output)
         data/output/stage7_candidates_pre_llm.jsonl (token contexts)
 
 Output: data/output/haiku_4_5_judge_results.tsv
-  token | final_label | source
-  source = 'haiku'    -> majority said NEOLOGISM and Haiku judged this token
-  source = 'majority' -> all other rows (Haiku verdict ignored even if present)
-
-The script reads majority_vote_results.tsv, keeps only NEOLOGISM-labeled rows
-(both unanimous and 2-of-3 majority), and sends them to Claude Haiku 4.5 for
-verification. Haiku's verdict wins for those rows; for every other token, the
-majority vote stands.
+  Two columns: token | final_label
+  Contains exactly the NEOLOGISM-flagged candidates from the majority vote
+  with Haiku's verdict (which may be NEOLOGISM-confirmed or downgraded to
+  ENTITY / FOREIGN / NONE).
 
 Resume: tokens already present in results_haiku.jsonl are skipped automatically.
 
