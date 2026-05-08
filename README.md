@@ -1,13 +1,7 @@
 # Neologism Detection Pipeline
 
-<<<<<<< HEAD
 > 📄 **Reference paper:** Rossini, D. & van der Plas, L. *From 124 Million Tokens to 1,021 Neologisms: A Large-Scale Pipeline for Automatic Neologism Detection*. Accepted at the **NeoLLM 2026 workshop at LREC 2026**.
 > Paper link: <!-- PAPER_URL --> *(to be added)*
-=======
-> 📄 **Reference paper:** *From 124 Million Tokens to 1,021 Neologisms:
-A Large-Scale Pipeline for Automatic Neologism Detection* — accepted at the **NeoLLM 2026 workshop at LREC 2026**.
-> Paper link: *to be added once published* ([placeholder URL]).
->>>>>>> 3c7d6a7c6d9fcf6c6eb25bb34e7a5acb80537bf6
 >
 > The paper provides the theoretical background and motivates several of the design choices in this pipeline (the reference-vocabulary filtering strategy, the multi-LLM ensemble + verifier architecture, the inflection-deduplication rules, and the choice of the four-label scheme). Users adapting this pipeline for their own work are strongly encouraged to read the paper first — many decisions that look arbitrary in the code are justified there.
 
@@ -60,7 +54,7 @@ Optional columns:
 | 6 | `stage_6_build_context.py` | For each remaining candidate, samples up to N occurrences from the original corpus to provide context for downstream classification. | High CPU + RAM |
 | 7 | `stage_7_llm_classify.py` | Runs three independent open-weight LLMs (Qwen, Llama, Mistral by default) via vLLM. Each returns one of four labels per token, after a context-level second pass of `lingua`. **Prompts are English-tuned by default.** | GPU (4× ≥ 80 GB recommended) |
 | 8 | `stage_8_majority_vote.py` | Consolidates labels from the three LLMs into a single per-token decision. Outputs `majority_vote_results.tsv`. **Optional**; can stop here if you want a single-vote ensemble. | Trivial |
-| 9 | `stage_9_haiku_judge.py` | Optional 4th-opinion verifier via Anthropic API (Claude Haiku by default). Filters the majority-vote output by `--scope` (unanimous / unanimous_majority / all) and replaces labels for verified tokens. **Optional**; skip entirely if you don't have an API key or don't need the extra opinion. | API quota |
+| 9 | `stage_9_haiku_judge.py` | Optional 4th-opinion verifier on the NEOLOGISM bucket via Anthropic API (Claude Haiku 4.5 by default). Reads `majority_vote_results.tsv`, sends every NEOLOGISM-labeled row to Haiku, and writes `haiku_4_5_judge_results.tsv` where Haiku's verdict (which may downgrade a token to ENTITY / FOREIGN / NONE) replaces the majority label *for those rows only*. All non-NEOLOGISM rows keep their majority-vote label. **Optional**; skip entirely if you don't have an API key. | API quota |
 | 10 | `stage_10_inflection_dedup.py` | Inflectional deduplication of the NEOLOGISM bucket: drops `-s`/`-es`/`-ies`/`-ing` variants when the base form is already present. **Rules are English-specific** — see *Adapting*. Auto-detects whether to read stage 9's output or stage 8's. | Trivial |
 
 The pipeline is **resumable**: each stage writes a `.flag` file in `data/checkpoints/` on completion and skips work it has already done.
@@ -137,7 +131,7 @@ python stage_5_frequency_filtering.py
 python stage_6_build_context.py
 python stage_7_llm_classify.py        # GPU recommended
 python stage_8_majority_vote.py
-python stage_9_haiku_judge.py --scope unanimous   # optional, requires ANTHROPIC_API_KEY
+python stage_9_haiku_judge.py                    # optional, requires ANTHROPIC_API_KEY
 python stage_10_inflection_dedup.py
 ```
 
@@ -147,7 +141,7 @@ Each stage writes a `.flag` file in `data/checkpoints/` on completion and skips 
 python stage_7_llm_classify.py --model qwen_72b
 ```
 
-If you skip stage 9, stage 10 will automatically read `majority_vote_results.tsv` (from stage 8) instead of `FINAL_RESULTS.tsv`.
+If you skip stage 9, stage 10 will automatically read `majority_vote_results.tsv` (from stage 8) instead of `haiku_4_5_judge_results.tsv`.
 
 For very large corpora, wrap any stage in your scheduler of choice (SLURM, PBS, k8s, etc.) — every script is self-contained and logs to stdout.
 

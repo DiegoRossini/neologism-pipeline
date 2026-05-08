@@ -8,10 +8,10 @@ from pathlib import Path
 
 from config import OUTPUT_DIR, CHECKPOINTS_DIR, LOG_DIR
 
-FINAL_RESULTS = OUTPUT_DIR / "FINAL_RESULTS.tsv"
+HAIKU_JUDGE_RESULTS = OUTPUT_DIR / "haiku_4_5_judge_results.tsv"
 MAJORITY_VOTE_RESULTS = OUTPUT_DIR / "majority_vote_results.tsv"
 DEDUPED_NEOLOGISMS = OUTPUT_DIR / "neologisms_deduplicated.tsv"
-ALL_DEDUPED_RESULTS = OUTPUT_DIR / "FINAL_RESULTS_dedup.tsv"
+ALL_DEDUPED_RESULTS = OUTPUT_DIR / "haiku_4_5_judge_results_dedup.tsv"
 INFLECTION_REPORT = OUTPUT_DIR / "neologisms_inflection_report.json"
 COMPLETE_FLAG = CHECKPOINTS_DIR / "stage10_dedup_complete.flag"
 
@@ -80,16 +80,16 @@ def run(args):
 
     if args.input:
         final_results_path = Path(args.input)
-    elif FINAL_RESULTS.exists():
-        final_results_path = FINAL_RESULTS
+    elif HAIKU_JUDGE_RESULTS.exists():
+        final_results_path = HAIKU_JUDGE_RESULTS
     elif MAJORITY_VOTE_RESULTS.exists():
         final_results_path = MAJORITY_VOTE_RESULTS
     else:
-        final_results_path = FINAL_RESULTS
+        final_results_path = HAIKU_JUDGE_RESULTS
 
     if not final_results_path.exists():
         logging.error(f"Input not found: {final_results_path}")
-        logging.error(f"Expected one of: {FINAL_RESULTS}, {MAJORITY_VOTE_RESULTS}, or --input <path>")
+        logging.error(f"Expected one of: {HAIKU_JUDGE_RESULTS}, {MAJORITY_VOTE_RESULTS}, or --input <path>")
         return False
 
     logging.info("=" * 70)
@@ -183,7 +183,7 @@ def main():
         description="Stage 10: Drop inflectional variants from the NEOLOGISM bucket",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Reads FINAL_RESULTS.tsv (or any TSV with token + final_label/label columns),
+Reads haiku_4_5_judge_results.tsv (or any TSV with token + final_label/label columns),
 filters to NEOLOGISM rows, and removes inflectional variants in favor of the
 base form. Past participle (-ed) is always kept because it can function as
 an adjective.
@@ -200,17 +200,17 @@ NEOLOGISM set. This avoids false collapses to non-existent bases.
 
 Outputs:
   neologisms_deduplicated.tsv         the final NEOLOGISM list (one per line)
-  FINAL_RESULTS_dedup.tsv             full results with dedup_status / base / rule
+  haiku_4_5_judge_results_dedup.tsv   full results with dedup_status / base / rule
   neologisms_inflection_report.json   stats and a sample of 300 inflection mappings
 
 Examples:
   python stage_10_inflection_dedup.py
   python stage_10_inflection_dedup.py --dry-run
-  python stage_10_inflection_dedup.py --input data/output/FINAL_RESULTS.tsv
+  python stage_10_inflection_dedup.py --input data/output/haiku_4_5_judge_results.tsv
 """,
     )
     parser.add_argument("--input", type=str, default=None,
-                        help=f"Input TSV. If omitted, prefers FINAL_RESULTS.tsv (stage 9 output), "
+                        help=f"Input TSV. If omitted, prefers haiku_4_5_judge_results.tsv (stage 9 output), "
                              f"falls back to majority_vote_results.tsv (stage 8 output).")
     parser.add_argument("--output", type=str, default=None,
                         help=f"Deduplicated NEOLOGISM list TSV (default: {DEDUPED_NEOLOGISMS})")

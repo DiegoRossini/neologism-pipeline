@@ -16,12 +16,6 @@ from config import OUTPUT_DIR, CHECKPOINTS_DIR, CLASSIFICATION_DIR, LOG_DIR
 
 VALID_LABELS = {"ENTITY", "NEOLOGISM", "FOREIGN", "NONE"}
 
-VOTE_TYPES_BY_SCOPE = {
-    "unanimous": {"unanimous", "unanimous_2of2", "single"},
-    "unanimous_majority": {"unanimous", "unanimous_2of2", "single", "majority"},
-    "all": {"unanimous", "unanimous_2of2", "single", "majority", "tie", "tie_2of2", "no_votes"},
-}
-
 DEFAULT_MODEL = "claude-haiku-4-5"
 MAX_NEW_TOKENS = 32
 POLL_INTERVAL_SEC = 30
@@ -32,7 +26,7 @@ MAJORITY_VOTE_RESULTS = OUTPUT_DIR / "majority_vote_results.tsv"
 CANDIDATES_PRE_LLM = OUTPUT_DIR / "stage7_candidates_pre_llm.jsonl"
 HAIKU_RESULTS = CLASSIFICATION_DIR / "results_haiku.jsonl"
 HAIKU_RAW_RESPONSES = CLASSIFICATION_DIR / "raw_responses_haiku.jsonl"
-FINAL_RESULTS = OUTPUT_DIR / "FINAL_RESULTS.tsv"
+HAIKU_JUDGE_RESULTS = OUTPUT_DIR / "haiku_4_5_judge_results.tsv"
 COMPLETE_FLAG = CHECKPOINTS_DIR / "stage9_haiku_complete.flag"
 BATCH_STATE_FILE = CHECKPOINTS_DIR / "stage9_haiku_batch.json"
 
@@ -282,10 +276,9 @@ def submit_batch(client, model, requests_with_tokens):
     return batch, custom_id_to_token
 
 
-def save_batch_state(scope, current_chunk_idx, total_chunks, current_batch_id, current_custom_id_to_token):
+def save_batch_state(current_chunk_idx, total_chunks, current_batch_id, current_custom_id_to_token):
     BATCH_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     state = {
-        "scope": scope,
         "current_chunk_idx": current_chunk_idx,
         "total_chunks": total_chunks,
         "current_batch_id": current_batch_id,
@@ -400,7 +393,7 @@ def write_final_results(majority_rows, haiku_results, output_path):
         f.write("token\tfinal_label\tsource\n")
         for row in majority_rows:
             tok = row["token"]
-            if tok in haiku_results:
+            if row["label"] == "NEOLOGISM" and tok in haiku_results:
                 f.write(f"{tok}\t{haiku_results[tok]}\thaiku\n")
             else:
                 f.write(f"{tok}\t{row['label']}\tmajority\n")
@@ -420,19 +413,6 @@ def chunked(seq, n):
         yield seq[i:i + n]
 
 
-def filter_rows(majority_rows, scope, labels_arg):
-    allowed_vote_types = VOTE_TYPES_BY_SCOPE[scope]
-    if labels_arg:
-        allowed_labels = set(l.strip().upper() for l in labels_arg.split(","))
-    else:
-        allowed_labels = set(VALID_LABELS)
-    return [
-        r for r in majority_rows
-        if r.get("vote_type") in allowed_vote_types
-        and r.get("label") in allowed_labels
-    ], allowed_labels
-
-
 def run(args):
     setup_logging()
 
@@ -448,12 +428,9 @@ def run(args):
         return False
 
     logging.info("=" * 70)
-    logging.info("STAGE 9: HAIKU JUDGE")
+    logging.info("STAGE 9: HAIKU JUDGE (NEOLOGISM verifier on majority-vote candidates)")
     logging.info("=" * 70)
     logging.info(f"Model: {args.model}")
-    logging.info(f"Scope: {args.scope}")
-    if args.labels:
-        logging.info(f"Labels filter: {args.labels}")
 
     client = get_anthropic_client()
 
@@ -478,12 +455,8 @@ def run(args):
     majority_rows = load_majority_vote_results(MAJORITY_VOTE_RESULTS)
     logging.info(f"Total tokens in majority vote: {len(majority_rows):,}")
 
-    filtered, allowed_labels = filter_rows(majority_rows, args.scope, args.labels)
-    invalid = allowed_labels - VALID_LABELS
-    if invalid:
-        logging.error(f"Invalid labels: {invalid}. Valid: {sorted(VALID_LABELS)}")
-        return False
-    logging.info(f"Filter -> {len(filtered):,} tokens (vote_types={sorted(VOTE_TYPES_BY_SCOPE[args.scope])}, labels={sorted(allowed_labels)})")
+    filtered = [r for r in majority_rows if r.get("label") == "NEOLOGISM"]
+    logging.info(f"Filter -> {len(filtered):,} NEOLOGISM-labeled candidates from majority vote")
 
     already_done = load_done_haiku_tokens(HAIKU_RESULTS)
     if already_done:
@@ -526,7 +499,7 @@ def run(args):
                 logging.info(f"--- Batch {chunk_idx + 1}/{len(chunks)} ({len(chunk):,} tokens) ---")
                 logging.info(f"  Submitting...")
                 batch, custom_id_to_token = submit_batch(client, args.model, chunk)
-                save_batch_state(args.scope, chunk_idx, len(chunks), batch.id, custom_id_to_token)
+                save_batch_state(chunk_idx, len(chunks), batch.id, custom_id_to_token)
                 logging.info(f"  Batch id={batch.id}; polling every {POLL_INTERVAL_SEC}s...")
                 batch, timed_out = poll_until_done(client, batch.id, timeout_sec=timeout_sec)
                 if timed_out:
@@ -540,17 +513,17 @@ def run(args):
             if n_skipped > 0:
                 logging.warning(f"{n_skipped}/{len(chunks)} chunks timed out and were skipped. Re-run to retry.")
 
-    logging.info("Building FINAL_RESULTS.tsv...")
+    logging.info(f"Building {HAIKU_JUDGE_RESULTS.name}...")
     haiku_results = load_done_haiku_tokens(HAIKU_RESULTS)
-    write_final_results(majority_rows, haiku_results, FINAL_RESULTS)
-    logging.info(f"Wrote {len(majority_rows):,} rows to {FINAL_RESULTS}")
+    write_final_results(majority_rows, haiku_results, HAIKU_JUDGE_RESULTS)
+    logging.info(f"Wrote {len(majority_rows):,} rows to {HAIKU_JUDGE_RESULTS}")
 
     final_counts = Counter()
     source_counts = Counter()
     haiku_disagreement = 0
     for row in majority_rows:
         tok = row["token"]
-        if tok in haiku_results:
+        if row["label"] == "NEOLOGISM" and tok in haiku_results:
             final_counts[haiku_results[tok]] += 1
             source_counts["haiku"] += 1
             if haiku_results[tok] != row["label"]:
@@ -584,35 +557,40 @@ def run(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Stage 9: Claude Haiku as final judge over majority-vote results",
+        description="Stage 9: Claude Haiku as final verifier on the NEOLOGISM bucket of the majority vote",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Three filter scopes (which tokens go to Haiku):
-  unanimous           only tokens where all 3 LLMs agreed
-  unanimous_majority  unanimous + 2-vs-1 majority (no ties)
-  all                 every token (including ties)
+Design: Haiku acts as a final verifier on the NEOLOGISM-labeled subset of the
+3-LLM majority vote. For every token where the majority vote says NEOLOGISM
+and Haiku has rendered a verdict, haiku_4_5_judge_results.tsv uses Haiku's
+label (which may downgrade the token to ENTITY / FOREIGN / NONE). For every
+other token (label != NEOLOGISM, or NEOLOGISM-labeled but Haiku skipped it),
+the majority vote stands.
 
-Optional --labels filter narrows further:
-  --labels NEOLOGISM,ENTITY
+Input:  data/output/majority_vote_results.tsv (stage 8 output)
+        data/output/stage7_candidates_pre_llm.jsonl (token contexts)
 
-Haiku's verdict ALWAYS wins for tokens it judges. Tokens not sent
-to Haiku keep their majority-vote label. The output FINAL_RESULTS.tsv
-records the source of each label (haiku | majority).
+Output: data/output/haiku_4_5_judge_results.tsv
+  token | final_label | source
+  source = 'haiku'    -> majority said NEOLOGISM and Haiku judged this token
+  source = 'majority' -> all other rows (Haiku verdict ignored even if present)
+
+The script reads majority_vote_results.tsv, keeps only NEOLOGISM-labeled rows
+(both unanimous and 2-of-3 majority), and sends them to Claude Haiku 4.5 for
+verification. Haiku's verdict wins for those rows; for every other token, the
+majority vote stands.
+
+Resume: tokens already present in results_haiku.jsonl are skipped automatically.
 
 Examples:
-  python stage_9_haiku_judge.py --scope unanimous
-  python stage_9_haiku_judge.py --scope unanimous_majority --labels NEOLOGISM,ENTITY
-  python stage_9_haiku_judge.py --scope all
+  python stage_9_haiku_judge.py
+  python stage_9_haiku_judge.py --force        # re-run even if complete flag exists
+  python stage_9_haiku_judge.py --realtime     # use real-time API instead of Batch (2x cost)
 
 Environment:
   ANTHROPIC_API_KEY must be set
 """,
     )
-    parser.add_argument("--scope", type=str, required=True,
-                        choices=["unanimous", "unanimous_majority", "all"],
-                        help="Which vote_types to send to Haiku")
-    parser.add_argument("--labels", type=str, default=None,
-                        help="Comma-separated labels to verify (default: all 4)")
     parser.add_argument("--model", type=str, default=DEFAULT_MODEL,
                         help=f"Claude model (default: {DEFAULT_MODEL})")
     parser.add_argument("--resubmit", action="store_true",
